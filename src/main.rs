@@ -7,6 +7,7 @@ use ggez::{
 };
 
 mod fly;
+mod renderers;
 
 fn main() {
   let mut setup = WindowSetup::default();
@@ -23,7 +24,8 @@ fn main() {
     .expect("failed to create context");
 
   let mut fly = fly::Fly::new();
-  fly.new_ball();
+  fly.new_ball(&mut ctx);
+  fly.new_ground(&mut ctx);
 
   match event::run(&mut ctx, &mut event_loop, &mut fly) {
     Ok(_) => println!("Exiting"),

@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
 use ggez::{
@@ -7,14 +8,17 @@ use ggez::{
 };
 use legion::prelude::*;
 use nalgebra::Vector2;
-use ncollide2d::shape::{Ball, ShapeHandle};
+use ncollide2d::shape::{Ball, Cuboid, ShapeHandle};
 use nphysics2d::{
   force_generator::DefaultForceGeneratorSet,
   joint::DefaultJointConstraintSet,
-  object::{BodyHandle, BodyPartHandle, ColliderDesc, ColliderHandle, DefaultBodyHandle,
-           DefaultBodySet, DefaultColliderHandle, DefaultColliderSet, RigidBodyDesc},
+  math::Velocity,
+  object::{BodyPartHandle, BodyStatus, ColliderDesc, DefaultBodyHandle, DefaultBodySet,
+           DefaultColliderHandle, DefaultColliderSet, RigidBodyDesc},
   world::{DefaultGeometricalWorld, DefaultMechanicalWorld},
 };
+
+use crate::renderers::{self, Drawables, Key};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Body {
@@ -23,9 +27,10 @@ struct Body {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Location {
+struct Render {
   pos: Vector2<f32>,
   rot: f32,
+  draw: Key,
 }
 
 pub struct Fly {
@@ -33,6 +38,7 @@ pub struct Fly {
   world: World,
   schedule: Schedule,
   physics: Arc<Mutex<Physics>>,
+  drawables: renderers::Drawables,
 }
 
 struct Physics {
@@ -45,29 +51,21 @@ struct Physics {
 }
 
 impl Fly {
-  pub fn new() -> Fly {
+  pub fn new() -> Self {
     let universe = Universe::new();
     let world = universe.create_world();
 
-    let mworld = DefaultMechanicalWorld::new(Vector2::new(0., -9.81));
-    let gworld = DefaultGeometricalWorld::new();
-    let bodies = DefaultBodySet::new();
-    let colliders = DefaultColliderSet::new();
-    let constraints = DefaultJointConstraintSet::new();
-    let forces = DefaultForceGeneratorSet::new();
-
     let physics = Arc::new(Mutex::new(Physics {
-      mworld,
-      gworld,
-      bodies,
-      colliders,
-      constraints,
-      forces,
+      mworld: DefaultMechanicalWorld::new(Vector2::new(0., -9.81)),
+      gworld: DefaultGeometricalWorld::new(),
+      bodies: DefaultBodySet::new(),
+      colliders: DefaultColliderSet::new(),
+      constraints: DefaultJointConstraintSet::new(),
+      forces: DefaultForceGeneratorSet::new(),
     }));
 
     let schedule = Schedule::builder()
       .add_system(physics_system(physics.clone()))
-      .add_system(physics_update_system(physics.clone()))
       .build();
 
     Fly {
@@ -75,13 +73,16 @@ impl Fly {
       world,
       schedule,
       physics,
+      drawables: Drawables::new(),
     }
   }
 
-  pub fn new_ball(&mut self) {
+  pub fn new_ball(&mut self, ctx: &mut Context) -> GameResult<&[Entity]> {
     let mut physics = self.physics.lock().unwrap();
+
     let body = RigidBodyDesc::new()
-      .translation(Vector2::new(20., 20.))
+      .translation(Vector2::new(100., 50.))
+      .velocity(Velocity::linear(10., 0.))
       .build();
     let bh = physics.bodies.insert(body);
 
@@ -91,15 +92,36 @@ impl Fly {
       .build(BodyPartHandle(bh, 0));
     let ch = physics.colliders.insert(collider);
 
-    self.world.insert((), vec![
-      (Body { bh, ch }, Location { pos: Vector2::new(0., 0.), rot: 0. }),
-    ]);
+    Ok(self.world.insert((), vec![
+      (Body { bh, ch }, Render { pos: Vector2::new(0., 0.), rot: 0., draw: self.drawables.player(ctx)? }),
+    ]))
+  }
+
+  pub fn new_ground(&mut self, ctx: &mut Context) -> GameResult<&[Entity]> {
+    let mut physics = self.physics.lock().unwrap();
+
+    let body = RigidBodyDesc::new()
+      .translation(Vector2::new(0., 0.))
+      .set_status(BodyStatus::Static)
+      .build();
+    let bh = physics.bodies.insert(body);
+
+    let shape = ShapeHandle::new(Cuboid::new(Vector2::new(500., 10.)));
+    let collider = ColliderDesc::new(shape)
+      .density(1.0)
+      .build(BodyPartHandle(bh, 0));
+    let ch = physics.colliders.insert(collider);
+
+    Ok(self.world.insert((), vec![
+      (Body { bh, ch }, Render { pos: Vector2::new(0., 0.), rot: 0., draw: self.drawables.ground(ctx)? }),
+    ]))
   }
 }
 
 fn physics_system(amphys: Arc<Mutex<Physics>>) -> Box<dyn Schedulable> {
   SystemBuilder::new("physics")
-    .build(move |_, _, _, _| {
+    .with_query(<(Read<Body>, Write<Render>)>::query())
+    .build(move |_, mut world, _, query| {
       let physics = &mut *amphys.lock().unwrap();
       physics.mworld.step(
         &mut physics.gworld,
@@ -108,20 +130,13 @@ fn physics_system(amphys: Arc<Mutex<Physics>>) -> Box<dyn Schedulable> {
         &mut physics.constraints,
         &mut physics.forces,
       );
-    })
-}
 
-fn physics_update_system(amphys: Arc<Mutex<Physics>>) -> Box<dyn Schedulable> {
-  SystemBuilder::new("physics_update")
-    .with_query(<(Read<Body>, Write<Location>)>::query())
-    .build(move |_, mut world, _, query| {
-      let physics = &*amphys.lock().unwrap();
-      for (body, mut loc) in query.iter(&mut world) {
+      for (body, mut rend) in query.iter(&mut world) {
         let body = physics.bodies.rigid_body(body.bh).unwrap();
         let v = body.position().translation.vector;
-        loc.pos.x = v[0];
-        loc.pos.y = v[1];
-        println!("{}, {}", loc.pos.x, loc.pos.y);
+        rend.pos.x = v[0];
+        rend.pos.y = v[1];
+        rend.rot = body.position().rotation.angle();
       }
     })
 }
@@ -133,22 +148,15 @@ impl EventHandler for Fly {
   }
 
   fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
-    let circle = graphics::Mesh::new_circle(
-      ctx,
-      graphics::DrawMode::fill(),
-      [0., 0.],
-      32.0,
-      1.0,
-      graphics::WHITE,
-    )?;
-
     graphics::clear(ctx, graphics::WHITE);
 
-    for loc in <Read<Location>>::query().iter(&mut self.world) {
+    for rend in <(Read<Render>)>::query().iter(&mut self.world) {
       let dp = DrawParam::default()
         .color(graphics::BLACK)
-        .dest([loc.pos.x, loc.pos.y]);
-      graphics::draw(ctx, &circle, dp)?;
+        .rotation(rend.rot)
+        .dest([rend.pos.x, rend.pos.y]);
+      let drawable = self.drawables.drawable(&rend.draw).unwrap().deref();
+      drawable.draw(ctx, dp)?;
     }
 
     graphics::present(ctx)

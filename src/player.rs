@@ -6,17 +6,18 @@ use legion::entity::Entity;
 use legion::world::World;
 use nalgebra::Vector2;
 
-use crate::fly::{Context, Render};
-use crate::meshes::MeshKey;
-use crate::phys::{Body, Physics};
+use crate::fly::Context;
+use crate::phys::Physics;
+use crate::render::RenderComp;
+use crate::resources::ResKey;
 
 pub struct Players {
-  circle: MeshKey,
+  circle: ResKey,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Player {
-  circle: MeshKey,
+  circle: ResKey,
 }
 
 impl Players {
@@ -30,21 +31,21 @@ impl Players {
       graphics::WHITE,
     )?;
     Ok(Players {
-      circle: ctx.meshes.register(c),
+      circle: ctx.meshes.reg_mesh(c),
     })
   }
 
   pub fn new(&mut self, world: &mut World, physics: &mut Physics) -> Entity {
     world.insert((), vec![
       (physics.add_ball(Vector2::new(20., 200.), 10.),
-       Render { pos: Vector2::new(0., 0.), rot: 0. },
+       RenderComp { pos: Vector2::new(0., 0.), rot: 0. },
        Player { circle: self.circle }),
     ])[0]
   }
 }
 
 impl Player {
-  pub fn draw(&self, rend: &Render, ctx: &mut Context) -> GameResult {
+  pub fn draw(&self, rend: &RenderComp, ctx: &mut Context) -> GameResult {
     let dp = DrawParam::default()
       .color(graphics::BLACK)
       .rotation(rend.rot)

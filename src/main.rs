@@ -1,8 +1,10 @@
 mod fly;
-mod meshes;
+mod phys;
+mod render;
+mod resources;
+mod controls;
 mod player;
 mod ground;
-mod phys;
 
 use crate::fly::Fly;
 

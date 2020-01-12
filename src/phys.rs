@@ -9,17 +9,26 @@ use ncollide2d::shape::{Ball, Cuboid, ShapeHandle};
 use nphysics2d::{
   force_generator::DefaultForceGeneratorSet,
   joint::DefaultJointConstraintSet,
-  object::{DefaultBodyHandle, DefaultBodySet, DefaultColliderHandle, DefaultColliderSet},
+  object::{Body, DefaultBodyHandle, DefaultBodySet, DefaultColliderHandle, DefaultColliderSet},
   world::{DefaultGeometricalWorld, DefaultMechanicalWorld},
 };
+use nphysics2d::algebra::{Force2, ForceType};
 use nphysics2d::object::{BodyPartHandle, BodyStatus, ColliderDesc, RigidBodyDesc};
 
-use crate::fly::Render;
+use crate::render::RenderComp;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Body {
-  pub bh: DefaultBodyHandle,
-  pub ch: DefaultColliderHandle,
+pub enum PhysCmd {
+  None,
+  Lift(f32),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PhysComp {
+  bh: DefaultBodyHandle,
+  ch: DefaultColliderHandle,
+
+  pub cmd: PhysCmd,
 }
 
 pub struct Physics {
@@ -51,13 +60,32 @@ impl Physics {
     }
   }
 
-  pub fn system(&mut self) -> Box<dyn Schedulable> {
-    let state = self.state.clone();
-    SystemBuilder::new("physics")
-      .with_query(<(Read<Body>, Write<Render>)>::query())
+  pub fn cmd_system(&mut self) -> Box<dyn Schedulable> {
+    let mutex = self.state.clone();
+    SystemBuilder::new("physics-cmd")
+      .with_query(<(Write<PhysComp>)>::query())
+      .build(move |_, mut world, _, query| {
+        let state = &mut *mutex.lock().unwrap();
+        for mut phys in query.iter(&mut world) {
+          match phys.cmd {
+            PhysCmd::None => {}
+            PhysCmd::Lift(amt) => {
+              let rigid = state.bodies.rigid_body_mut(phys.bh).unwrap();
+              rigid.apply_force(0, &Force2::linear(Vector2::new(0., amt)), ForceType::Impulse, false);
+            }
+          }
+          phys.cmd = PhysCmd::None;
+        }
+      })
+  }
+
+  pub fn sim_system(&mut self) -> Box<dyn Schedulable> {
+    let mutex = self.state.clone();
+    SystemBuilder::new("physics-sim")
+      .with_query(<(Read<PhysComp>, Write<RenderComp>)>::query())
       .build(move |_, mut world, _, query| {
         // Step the nphysics world.
-        let state = &mut *state.lock().unwrap();
+        let state = &mut *mutex.lock().unwrap();
         state.mworld.step(
           &mut state.gworld,
           &mut state.bodies,
@@ -67,17 +95,17 @@ impl Physics {
         );
 
         // Update all the render components from their nphysics bodies.
-        for (body, mut rend) in query.iter(&mut world) {
-          let body = state.bodies.rigid_body(body.bh).unwrap();
-          let v = body.position().translation.vector;
+        for (phys, mut rend) in query.iter(&mut world) {
+          let rigid = state.bodies.rigid_body(phys.bh).unwrap();
+          let v = rigid.position().translation.vector;
           rend.pos.x = v[0];
           rend.pos.y = v[1];
-          rend.rot = body.position().rotation.angle();
+          rend.rot = rigid.position().rotation.angle();
         }
       })
   }
 
-  pub fn add_static_rect(&mut self, pos: Vector2<f32>, half_extents: Vector2<f32>) -> Body {
+  pub fn add_static_rect(&mut self, pos: Vector2<f32>, half_extents: Vector2<f32>) -> PhysComp {
     let state = &mut *self.state.lock().unwrap();
     let body = RigidBodyDesc::new()
       .translation(pos)
@@ -87,14 +115,14 @@ impl Physics {
 
     let shape = ShapeHandle::new(Cuboid::new(half_extents));
     let collider = ColliderDesc::new(shape)
-      .density(1.0)
+      .density(0.1)
       .build(BodyPartHandle(bh, 0));
     let ch = state.colliders.insert(collider);
 
-    Body { bh, ch }
+    PhysComp { bh, ch, cmd: PhysCmd::None }
   }
 
-  pub fn add_ball(&mut self, pos: Vector2<f32>, radius: f32) -> Body {
+  pub fn add_ball(&mut self, pos: Vector2<f32>, radius: f32) -> PhysComp {
     let state = &mut *self.state.lock().unwrap();
     let body = RigidBodyDesc::new()
       .translation(pos)
@@ -103,10 +131,10 @@ impl Physics {
 
     let shape = ShapeHandle::new(Ball::new(radius));
     let collider = ColliderDesc::new(shape)
-      .density(1.0)
+      .density(0.1)
       .build(BodyPartHandle(bh, 0));
     let ch = state.colliders.insert(collider);
 
-    Body { bh, ch }
+    PhysComp { bh, ch, cmd: PhysCmd::None }
   }
 }

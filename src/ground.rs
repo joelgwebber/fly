@@ -6,17 +6,18 @@ use legion::entity::Entity;
 use legion::world::World;
 use nalgebra::Vector2;
 
-use crate::fly::{Context, Render};
-use crate::meshes::MeshKey;
-use crate::phys::{Body, Physics};
+use crate::fly::Context;
+use crate::phys::Physics;
+use crate::render::RenderComp;
+use crate::resources::ResKey;
 
 pub struct Grounds {
-  rect: MeshKey,
+  rect: ResKey,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ground {
-  rect: MeshKey,
+  rect: ResKey,
 }
 
 impl Grounds {
@@ -29,21 +30,21 @@ impl Grounds {
     )?;
 
     Ok(Grounds {
-      rect: ctx.meshes.register(r),
+      rect: ctx.meshes.reg_mesh(r),
     })
   }
 
   pub fn new(&self, world: &mut World, physics: &mut Physics) -> Entity {
     world.insert((), vec![
       (physics.add_static_rect(Vector2::new(0., 0.), Vector2::new(500., 10.)),
-       Render { pos: Vector2::new(0., 0.), rot: 0. },
+       RenderComp { pos: Vector2::new(0., 0.), rot: 0. },
        Ground { rect: self.rect }),
     ])[0]
   }
 }
 
 impl Ground {
-  pub fn draw(&self, rend: &Render, ctx: &mut Context) -> GameResult {
+  pub fn draw(&self, rend: &RenderComp, ctx: &mut Context) -> GameResult {
     let dp = DrawParam::default()
       .color(graphics::BLACK)
       .rotation(rend.rot)

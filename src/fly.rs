@@ -3,19 +3,15 @@ use ggez::{
   GameResult,
   graphics,
 };
+use ggez::event::MouseButton;
 use legion::prelude::*;
-use nalgebra::Vector2;
 
-use crate::ground::{Ground, Grounds};
-use crate::meshes::Meshes;
+use crate::controls::Controls;
+use crate::ground::Grounds;
 use crate::phys::Physics;
-use crate::player::{Player, Players};
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Render {
-  pub pos: Vector2<f32>,
-  pub rot: f32,
-}
+use crate::player::Players;
+use crate::render::render_world;
+use crate::resources::Resources;
 
 pub struct Fly {
   universe: Universe,
@@ -26,12 +22,14 @@ pub struct Fly {
   grounds: Grounds,
   players: Players,
 
-  pub meshes: Meshes,
+  controls: Controls,
+
+  pub resources: Resources,
 }
 
 pub struct Context<'a> {
   pub gctx: &'a mut ggez::Context,
-  pub meshes: &'a mut Meshes,
+  pub meshes: &'a mut Resources,
 }
 
 impl Fly {
@@ -54,10 +52,11 @@ impl Fly {
     let mut physics = Physics::new();
 
     let schedule = Schedule::builder()
-      .add_system(physics.system())
+      .add_system(physics.cmd_system())
+      .add_system(physics.sim_system())
       .build();
 
-    let mut meshes = Meshes::new();
+    let mut meshes = Resources::new();
     let ctx = &mut Context {
       gctx: &mut gctx,
       meshes: &mut meshes,
@@ -70,9 +69,10 @@ impl Fly {
       world,
       schedule,
       physics,
-      meshes,
       grounds,
       players,
+      controls: Controls::new(),
+      resources: meshes,
     };
 
     fly.init_scene();
@@ -80,7 +80,7 @@ impl Fly {
   }
 
   fn init_scene(&mut self) {
-    self.new_player();
+    self.controls.player = Some(self.new_player());
     self.new_ground();
   }
 
@@ -95,25 +95,21 @@ impl Fly {
 
 impl EventHandler for Fly {
   fn update(&mut self, _ctx: &mut ggez::Context) -> GameResult<()> {
+    self.controls.update(&mut self.world);
     self.schedule.execute(&mut self.world);
     Ok(())
   }
 
   fn draw(&mut self, gctx: &mut ggez::Context) -> GameResult {
-    graphics::clear(gctx, graphics::WHITE);
+    render_world(&mut self.world, &mut Context { meshes: &mut self.resources, gctx })
+  }
 
-    {
-      let ctx = &mut Context { meshes: &mut self.meshes, gctx };
-      for (ground, rend) in <(Read<Ground>, Read<Render>)>::query().iter(&mut self.world) {
-        ground.draw(&rend, ctx)?;
-      }
+  fn mouse_button_down_event(&mut self, _ctx: &mut ggez::Context, _button: MouseButton, _x: f32, _y: f32) {
+    self.controls.flapping = true;
+  }
 
-      for (player, rend) in <(Read<Player>, Read<Render>)>::query().iter(&mut self.world) {
-        player.draw(&rend, ctx)?;
-      }
-    }
-
-    graphics::present(gctx)
+  fn mouse_button_up_event(&mut self, _ctx: &mut ggez::Context, _button: MouseButton, _x: f32, _y: f32) {
+    self.controls.flapping = false
   }
 
   fn resize_event(&mut self, _ctx: &mut ggez::Context, _width: f32, _height: f32) {

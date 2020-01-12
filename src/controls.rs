@@ -1,7 +1,7 @@
 use legion::entity::Entity;
 use legion::world::World;
 
-use crate::phys::{PhysComp, PhysCmd};
+use crate::phys::{PhysCmd, PhysComp};
 
 pub struct Controls {
   pub player: Option<Entity>,
@@ -17,13 +17,14 @@ impl Controls {
   }
 
   pub fn update(&mut self, world: &mut World) {
-    if self.player.is_none() {
-      return;
-    }
-    if self.flapping {
-      let ent = self.player.unwrap();
-      let mut phys = world.get_component_mut::<PhysComp>(ent).unwrap();
-      phys.cmd = PhysCmd::Lift(10.);
+    match self.player {
+      Some(player) => {
+        if self.flapping {
+          let mut phys = world.get_component_mut::<PhysComp>(player).unwrap();
+          phys.cmd = PhysCmd::Lift(10.);
+        }
+      }
+      None => {}
     }
   }
 }

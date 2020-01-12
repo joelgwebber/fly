@@ -6,22 +6,24 @@ use legion::entity::Entity;
 use legion::world::World;
 use nalgebra::Vector2;
 
-use crate::fly::Context;
+use crate::camera::{Camera, Renderable, RenderComp};
+use crate::fly::{Context, InitContext};
 use crate::phys::Physics;
-use crate::render::RenderComp;
 use crate::resources::ResKey;
 
-pub struct Grounds {
-  rect: ResKey,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Ground {
   rect: ResKey,
 }
 
-impl Grounds {
-  pub fn init(ctx: &mut Context) -> GameResult<Grounds> {
+#[derive(Clone, Debug, PartialEq)]
+pub struct GroundComp {
+  rect: ResKey,
+}
+
+impl Ground {
+  pub fn init(ctx: &mut InitContext, camera: &mut Camera) -> GameResult<Ground> {
+    camera.register::<GroundComp>();
+
     let r = Mesh::new_rectangle(
       &mut ctx.gctx,
       DrawMode::fill(),
@@ -29,7 +31,7 @@ impl Grounds {
       graphics::WHITE,
     )?;
 
-    Ok(Grounds {
+    Ok(Ground {
       rect: ctx.meshes.reg_mesh(r),
     })
   }
@@ -38,13 +40,13 @@ impl Grounds {
     world.insert((), vec![
       (physics.add_static_rect(Vector2::new(0., 0.), Vector2::new(500., 10.)),
        RenderComp { pos: Vector2::new(0., 0.), rot: 0. },
-       Ground { rect: self.rect }),
+       GroundComp { rect: self.rect }),
     ])[0]
   }
 }
 
-impl Ground {
-  pub fn draw(&self, rend: &RenderComp, ctx: &mut Context) -> GameResult {
+impl Renderable for GroundComp {
+  fn render(&self, rend: &RenderComp, ctx: &mut Context) -> GameResult {
     let dp = DrawParam::default()
       .color(graphics::BLACK)
       .rotation(rend.rot)

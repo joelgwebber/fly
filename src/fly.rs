@@ -1,16 +1,14 @@
 use ggez::{
-  self, conf::{WindowMode, WindowSetup}, ContextBuilder, event::{self, EventHandler},
-  GameResult,
-  graphics,
+  self, conf::{WindowMode, WindowSetup}, ContextBuilder, event::{self, EventHandler}, GameResult,
 };
 use ggez::event::MouseButton;
 use legion::prelude::*;
 
+use crate::camera::Camera;
 use crate::controls::Controls;
-use crate::ground::Grounds;
+use crate::ground::Ground;
 use crate::phys::Physics;
-use crate::player::Players;
-use crate::render::render_world;
+use crate::player::Player;
 use crate::resources::Resources;
 
 pub struct Fly {
@@ -19,17 +17,23 @@ pub struct Fly {
   schedule: Schedule,
   physics: Physics,
 
-  grounds: Grounds,
-  players: Players,
+  ground: Ground,
+  player: Player,
 
+  camera: Camera,
   controls: Controls,
 
   pub resources: Resources,
 }
 
-pub struct Context<'a> {
+pub struct InitContext<'a> {
   pub gctx: &'a mut ggez::Context,
   pub meshes: &'a mut Resources,
+}
+
+pub struct Context<'a> {
+  pub gctx: &'a mut ggez::Context,
+  pub meshes: &'a Resources,
 }
 
 impl Fly {
@@ -57,20 +61,23 @@ impl Fly {
       .build();
 
     let mut meshes = Resources::new();
-    let ctx = &mut Context {
+    let ctx = &mut InitContext {
       gctx: &mut gctx,
       meshes: &mut meshes,
     };
 
-    let grounds = Grounds::init(ctx)?;
-    let players = Players::init(ctx)?;
+    let mut camera = Camera::new();
+    let ground = Ground::init(ctx, &mut camera)?;
+    let player = Player::init(ctx, &mut camera)?;
+
     let fly = &mut Fly {
       universe,
       world,
       schedule,
       physics,
-      grounds,
-      players,
+      ground,
+      player,
+      camera,
       controls: Controls::new(),
       resources: meshes,
     };
@@ -80,16 +87,8 @@ impl Fly {
   }
 
   fn init_scene(&mut self) {
-    self.controls.player = Some(self.new_player());
-    self.new_ground();
-  }
-
-  fn new_player(&mut self) -> Entity {
-    self.players.new(&mut self.world, &mut self.physics)
-  }
-
-  fn new_ground(&mut self) -> Entity {
-    self.grounds.new(&mut self.world, &mut self.physics)
+    self.controls.player = Some(self.player.new(&mut self.world, &mut self.physics));
+    self.ground.new(&mut self.world, &mut self.physics);
   }
 }
 
@@ -101,7 +100,8 @@ impl EventHandler for Fly {
   }
 
   fn draw(&mut self, gctx: &mut ggez::Context) -> GameResult {
-    render_world(&mut self.world, &mut Context { meshes: &mut self.resources, gctx })
+    let ctx = &mut Context { meshes: &mut self.resources, gctx };
+    self.camera.render(&mut self.world, ctx)
   }
 
   fn mouse_button_down_event(&mut self, _ctx: &mut ggez::Context, _button: MouseButton, _x: f32, _y: f32) {
@@ -110,9 +110,5 @@ impl EventHandler for Fly {
 
   fn mouse_button_up_event(&mut self, _ctx: &mut ggez::Context, _button: MouseButton, _x: f32, _y: f32) {
     self.controls.flapping = false
-  }
-
-  fn resize_event(&mut self, _ctx: &mut ggez::Context, _width: f32, _height: f32) {
-    // TODO
   }
 }

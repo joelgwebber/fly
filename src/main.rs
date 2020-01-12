@@ -1,6 +1,6 @@
 mod fly;
 mod phys;
-mod render;
+mod camera;
 mod resources;
 mod controls;
 mod player;

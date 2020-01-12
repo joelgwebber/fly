@@ -15,15 +15,15 @@ use nphysics2d::{
 use nphysics2d::algebra::{Force2, ForceType};
 use nphysics2d::object::{BodyPartHandle, BodyStatus, ColliderDesc, RigidBodyDesc};
 
-use crate::render::RenderComp;
+use crate::camera::RenderComp;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PhysCmd {
   None,
   Lift(f32),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PhysComp {
   bh: DefaultBodyHandle,
   ch: DefaultColliderHandle,

@@ -6,22 +6,24 @@ use legion::entity::Entity;
 use legion::world::World;
 use nalgebra::Vector2;
 
-use crate::fly::Context;
+use crate::camera::{Camera, Renderable, RenderComp};
+use crate::fly::{Context, InitContext};
 use crate::phys::Physics;
-use crate::render::RenderComp;
 use crate::resources::ResKey;
 
-pub struct Players {
-  circle: ResKey,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Player {
   circle: ResKey,
 }
 
-impl Players {
-  pub fn init(ctx: &mut Context) -> GameResult<Players> {
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlayerComp {
+  circle: ResKey,
+}
+
+impl Player {
+  pub fn init(ctx: &mut InitContext, camera: &mut Camera) -> GameResult<Player> {
+    camera.register::<PlayerComp>();
+
     let c = Mesh::new_circle(
       ctx.gctx,
       DrawMode::fill(),
@@ -30,7 +32,7 @@ impl Players {
       1.0,
       graphics::WHITE,
     )?;
-    Ok(Players {
+    Ok(Player {
       circle: ctx.meshes.reg_mesh(c),
     })
   }
@@ -39,13 +41,13 @@ impl Players {
     world.insert((), vec![
       (physics.add_ball(Vector2::new(20., 200.), 10.),
        RenderComp { pos: Vector2::new(0., 0.), rot: 0. },
-       Player { circle: self.circle }),
+       PlayerComp { circle: self.circle }),
     ])[0]
   }
 }
 
-impl Player {
-  pub fn draw(&self, rend: &RenderComp, ctx: &mut Context) -> GameResult {
+impl Renderable for PlayerComp {
+  fn render(&self, rend: &RenderComp, ctx: &mut Context) -> GameResult {
     let dp = DrawParam::default()
       .color(graphics::BLACK)
       .rotation(rend.rot)

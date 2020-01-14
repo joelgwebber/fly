@@ -1,7 +1,8 @@
+mod game;
 mod fly;
 mod phys;
 mod camera;
-mod resources;
+mod meshes;
 mod controls;
 mod player;
 mod ground;

@@ -1,39 +1,38 @@
+use std::sync::Arc;
+
 use ggez::{
-  self, GameResult,
-  graphics::{self, Drawable, DrawMode, DrawParam, Mesh},
+  self, Context, GameResult,
+  graphics::{self, Drawable, DrawParam, Mesh},
 };
 use legion::entity::Entity;
 use legion::world::World;
 use nalgebra::Vector2;
 
 use crate::camera::{Camera, Renderable, RenderComp};
-use crate::fly::{Context, InitContext};
 use crate::phys::Physics;
-use crate::resources::ResKey;
+use crate::game::Shared;
 
 pub struct Player {
-  circle: ResKey,
+  res: Arc<Resources>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+struct Resources {
+  circle: Mesh,
+}
+
+#[derive(Clone)]
 pub struct PlayerComp {
-  circle: ResKey,
+  res: Arc<Resources>,
 }
 
 impl Player {
-  pub fn init(ctx: &mut InitContext, camera: &mut Camera) -> GameResult<Player> {
+  pub fn init(shared: &mut Shared, ctx: &mut Context, camera: &mut Camera) -> GameResult<Player> {
     camera.register::<PlayerComp>();
 
-    let c = Mesh::new_circle(
-      ctx.gctx,
-      DrawMode::fill(),
-      [0., 0.],
-      10.0,
-      1.0,
-      graphics::WHITE,
-    )?;
     Ok(Player {
-      circle: ctx.meshes.reg_mesh(c),
+      res: Arc::new(Resources {
+        circle: shared.meshes.circle(ctx, 10.)?,
+      }),
     })
   }
 
@@ -41,19 +40,18 @@ impl Player {
     world.insert((), vec![
       (physics.add_ball(Vector2::new(20., 200.), 10.),
        RenderComp { pos: Vector2::new(0., 0.), rot: 0. },
-       PlayerComp { circle: self.circle }),
+       PlayerComp { res: self.res.clone() /*circle: self.circle*/ }),
     ])[0]
   }
 }
 
 impl Renderable for PlayerComp {
-  fn render(&self, rend: &RenderComp, ctx: &mut Context) -> GameResult {
+  fn render(&self, _shared: &Shared, ctx: &mut Context, rend: &RenderComp) -> GameResult {
     let dp = DrawParam::default()
       .color(graphics::BLACK)
       .rotation(rend.rot)
       .dest([rend.pos.x, rend.pos.y]);
 
-    let circle = ctx.meshes.mesh(self.circle).unwrap();
-    circle.draw(&mut ctx.gctx, dp)
+    self.res.circle.draw(ctx, dp)
   }
 }

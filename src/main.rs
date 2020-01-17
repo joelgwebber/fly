@@ -1,4 +1,3 @@
-mod game;
 mod fly;
 mod phys;
 mod camera;

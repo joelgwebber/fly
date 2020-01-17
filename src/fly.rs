@@ -3,13 +3,14 @@ use ggez::{
 };
 use ggez::event::MouseButton;
 use legion::prelude::*;
+use legion::schedule::Schedule;
 
 use crate::camera::Camera;
 use crate::controls::Controls;
 use crate::ground::Ground;
+use crate::meshes::Meshes;
 use crate::phys::Physics;
 use crate::player::Player;
-use crate::game::{Shared};
 
 pub struct Fly {
   universe: Universe,
@@ -20,9 +21,13 @@ pub struct Fly {
   ground: Ground,
   player: Player,
 
-  camera: Camera,
   controls: Controls,
   shared: Shared,
+}
+
+pub struct Shared {
+  pub meshes: Meshes,
+  pub camera: Camera,
 }
 
 impl Fly {
@@ -42,18 +47,16 @@ impl Fly {
 
     let universe = Universe::new();
     let world = universe.create_world();
-    let mut physics = Physics::new();
-
-    let schedule = Schedule::builder()
-      .add_system(physics.cmd_system())
-      .add_system(physics.sim_system())
-      .build();
-
+    let physics = Physics::new();
+    let schedule = Fly::init_systems(&physics);
     let controls = Controls::new();
-    let mut camera = Camera::new();
-    let mut shared = Shared::new();
-    let ground = Ground::init(&mut shared, &mut gctx, &mut camera)?;
-    let player = Player::init(&mut shared, &mut gctx, &mut camera)?;
+
+    let mut shared = Shared {
+      meshes: Meshes::new(),
+      camera: Camera::new(),
+    };
+    let ground = Ground::init(&mut shared, &mut gctx)?;
+    let player = Player::init(&mut shared, &mut gctx)?;
 
     let fly = &mut Fly {
       universe,
@@ -62,13 +65,19 @@ impl Fly {
       physics,
       ground,
       player,
-      camera,
       controls,
       shared,
     };
 
     fly.init_scene();
     event::run(&mut gctx, &mut event_loop, fly)
+  }
+
+  fn init_systems(physics: &Physics) -> Schedule {
+    Schedule::builder()
+      .add_system(physics.cmd_system())
+      .add_system(physics.sim_system())
+      .build()
   }
 
   fn init_scene(&mut self) {
@@ -85,7 +94,7 @@ impl EventHandler for Fly {
   }
 
   fn draw(&mut self, ctx: &mut Context) -> GameResult {
-    self.camera.render(&self.shared, ctx, &mut self.world)
+    self.shared.camera.render(&self.shared, ctx, &mut self.world)
   }
 
   fn mouse_button_down_event(&mut self, _ctx: &mut Context, _button: MouseButton, _x: f32, _y: f32) {

@@ -60,7 +60,7 @@ impl Physics {
     }
   }
 
-  pub fn cmd_system(&mut self) -> Box<dyn Schedulable> {
+  pub fn cmd_system(&self) -> Box<dyn Schedulable> {
     let mutex = self.state.clone();
     SystemBuilder::new("physics-cmd")
       .with_query(<(Write<PhysComp>)>::query())
@@ -79,7 +79,7 @@ impl Physics {
       })
   }
 
-  pub fn sim_system(&mut self) -> Box<dyn Schedulable> {
+  pub fn sim_system(&self) -> Box<dyn Schedulable> {
     let mutex = self.state.clone();
     SystemBuilder::new("physics-sim")
       .with_query(<(Read<PhysComp>, Write<RenderComp>)>::query())

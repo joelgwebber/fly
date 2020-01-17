@@ -8,9 +8,9 @@ use legion::entity::Entity;
 use legion::world::World;
 use nalgebra::Vector2;
 
-use crate::camera::{Camera, Renderable, RenderComp};
+use crate::camera::{Renderable, RenderComp};
+use crate::fly::Shared;
 use crate::phys::Physics;
-use crate::game::Shared;
 
 pub struct Ground {
   res: Arc<Resources>,
@@ -26,8 +26,8 @@ pub struct GroundComp {
 }
 
 impl Ground {
-  pub fn init(shared: &mut Shared, ctx: &mut Context, camera: &mut Camera) -> GameResult<Ground> {
-    camera.register::<GroundComp>();
+  pub fn init(shared: &mut Shared, ctx: &mut Context) -> GameResult<Ground> {
+    shared.camera.register::<GroundComp>();
 
     Ok(Ground {
       res: Arc::new(Resources {

@@ -1,10 +1,11 @@
-use ggez::{graphics, Context, GameResult};
+use ggez::{Context, GameResult, graphics};
 use legion::query::IntoQuery;
 use legion::query::Read;
 use legion::world::World;
 use nalgebra::Vector2;
 
-use crate::game::Shared;
+use crate::fly::Shared;
+use ggez::graphics::DrawParam;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RenderComp {
@@ -43,6 +44,11 @@ impl Camera {
 
   pub fn render(&self, shared: &Shared, ctx: &mut Context, world: &mut World) -> GameResult {
     graphics::clear(ctx, graphics::WHITE);
+    let mut dp = DrawParam::new();
+    dp.dest = [0., 512.].into();
+    dp.scale = [1., -1.].into();
+    graphics::push_transform(ctx, Some(dp.to_matrix()));
+    graphics::apply_transformations(ctx)?;
 
     self.renderers.iter().for_each(|rfn| {
       match rfn(shared, ctx, world) {
@@ -51,6 +57,8 @@ impl Camera {
       }
     });
 
+    graphics::pop_transform(ctx);
+    graphics::apply_transformations(ctx)?;
     graphics::present(ctx)
   }
 }

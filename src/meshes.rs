@@ -1,5 +1,6 @@
 use ggez::{Context, GameResult, graphics};
 use ggez::graphics::{DrawMode, Mesh};
+use nalgebra::{Vector2, Point2};
 
 pub struct Meshes {
 }
@@ -9,9 +10,9 @@ impl Meshes {
     Meshes { }
   }
 
-  pub fn circle(&self, gctx: &mut Context, radius: f32) -> GameResult<Mesh> {
+  pub fn circle(&self, ctx: &mut Context, radius: f32) -> GameResult<Mesh> {
     Mesh::new_circle(
-      gctx,
+      ctx,
       DrawMode::fill(),
       [0., 0.],
       radius,
@@ -20,12 +21,16 @@ impl Meshes {
     )
   }
 
-  pub fn rect(&self, gctx: &mut Context, width: f32, height: f32) -> GameResult<Mesh> {
+  pub fn rect(&self, ctx: &mut Context, width: f32, height: f32) -> GameResult<Mesh> {
     Mesh::new_rectangle(
-      gctx,
+      ctx,
       DrawMode::fill(),
       graphics::Rect { x: 0., y: 0., w: width, h: height },
       graphics::WHITE,
     )
+  }
+
+  pub fn poly(&self, ctx: &mut Context, points: &[Point2<f32>]) -> GameResult<Mesh> {
+    Mesh::new_polygon(ctx, DrawMode::fill(), points, graphics::WHITE)
   }
 }

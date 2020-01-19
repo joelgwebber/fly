@@ -1,32 +1,40 @@
 use ggez::{Context, GameResult, graphics};
-use legion::query::IntoQuery;
+use ggez::graphics::DrawParam;
+use legion::entity::Entity;
+use legion::query::{IntoQuery, Write};
 use legion::query::Read;
+use legion::schedule::Schedulable;
+use legion::system::SystemBuilder;
 use legion::world::World;
+use nalgebra::Matrix4;
 use nalgebra::Vector2;
+use nalgebra::Vector3;
 
 use crate::fly::Shared;
-use ggez::graphics::DrawParam;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct RenderComp {
-  pub pos: Vector2<f32>,
-  pub rot: f32,
-}
+use crate::player::PlayerComp;
 
 pub trait Renderable {
-  fn render(&self, shared: &Shared, ctx: &mut Context, rend: &RenderComp) -> GameResult;
+  fn render(&self, ctx: &mut Context, rend: &RenderComp) -> GameResult;
 }
 
-type RenderFn = fn(&Shared, &mut Context, &mut World) -> GameResult;
+type RenderFn = fn(&mut World, &mut Context) -> GameResult;
 
 pub struct Camera {
   renderers: Vec<RenderFn>,
+  pub pos: Vector2<f32>,
+}
+
+#[derive(Clone)]
+pub struct RenderComp {
+  pub pos: Vector2<f32>,
+  pub rot: f32,
 }
 
 impl Camera {
   pub fn new() -> Camera {
     Camera {
       renderers: Vec::new(),
+      pos: Vector2::new(0., 0.),
     }
   }
 
@@ -34,24 +42,26 @@ impl Camera {
     where
       R: Renderable + Send + Sync + 'static
   {
-    self.renderers.push(|shared, ctx, world| {
+    self.renderers.push(|world, ctx| {
       for (rend, comp) in <(Read<RenderComp>, Read<R>)>::query().iter(world) {
-        comp.render(shared, ctx, &rend)?;
+        comp.render(ctx, &rend)?;
       }
       Ok(())
     })
   }
 
-  pub fn render(&self, shared: &Shared, ctx: &mut Context, world: &mut World) -> GameResult {
+  pub fn render(&self, world: &mut World, ctx: &mut Context) -> GameResult {
     graphics::clear(ctx, graphics::WHITE);
-    let mut dp = DrawParam::new();
-    dp.dest = [0., 512.].into();
-    dp.scale = [1., -1.].into();
-    graphics::push_transform(ctx, Some(dp.to_matrix()));
+
+    let m = Matrix4::new_nonuniform_scaling(&Vector3::new(1., -1., 0.))
+      .append_translation(&Vector3::new(512., 256., 0.))
+      .append_translation(&Vector3::new(-self.pos.x, self.pos.y, 0.));
+
+    graphics::push_transform(ctx, Some(m));
     graphics::apply_transformations(ctx)?;
 
     self.renderers.iter().for_each(|rfn| {
-      match rfn(shared, ctx, world) {
+      match rfn(world, ctx) {
         Ok(_) => (),
         Err(e) => panic!("{:?}", e)
       }
@@ -60,5 +70,9 @@ impl Camera {
     graphics::pop_transform(ctx);
     graphics::apply_transformations(ctx)?;
     graphics::present(ctx)
+  }
+
+  pub fn update(&mut self, world: &World, player_ent: Entity) {
+    self.pos = world.get_component::<RenderComp>(player_ent).unwrap().pos;
   }
 }

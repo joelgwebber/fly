@@ -6,7 +6,7 @@ use ggez::{
 };
 use legion::entity::Entity;
 use legion::world::World;
-use nalgebra::Vector2;
+use nalgebra::{Point2, Vector2};
 
 use crate::camera::{Renderable, RenderComp};
 use crate::fly::Shared;
@@ -16,12 +16,11 @@ pub struct Ground {
   res: Arc<Resources>,
 }
 
-struct Resources {
-  rect: Mesh,
-}
+struct Resources {}
 
 #[derive(Clone)]
 pub struct GroundComp {
+  poly: Mesh,
   res: Arc<Resources>,
 }
 
@@ -30,28 +29,36 @@ impl Ground {
     shared.camera.register::<GroundComp>();
 
     Ok(Ground {
-      res: Arc::new(Resources {
-        rect: shared.meshes.rect(ctx, 500., 10.)?,
-      }),
+      res: Arc::new(Resources {}),
     })
   }
 
-  pub fn new(&self, world: &mut World, physics: &mut Physics) -> Entity {
-    world.insert((), vec![
-      (physics.add_static_rect(Vector2::new(0., 0.), Vector2::new(500., 10.)),
+  pub fn new(&self, shared: &mut Shared, ctx: &mut ggez::Context) -> GameResult<Entity> {
+    let points: [Point2<f32>; 4] = [
+      Point2::new(0., 50.),
+      Point2::new(100., 10.),
+      Point2::new(100., 0.),
+      Point2::new(0., 0.),
+    ];
+
+    Ok(shared.world.insert((), vec![
+      (shared.physics.add_static_poly(&points),
        RenderComp { pos: Vector2::new(0., 0.), rot: 0. },
-       GroundComp { res: self.res.clone() }),
-    ])[0]
+       GroundComp {
+         res: self.res.clone(),
+         poly: shared.meshes.poly(ctx, &points)?,
+       }),
+    ])[0])
   }
 }
 
 impl Renderable for GroundComp {
-  fn render(&self, _shared: &Shared, ctx: &mut Context, rend: &RenderComp) -> GameResult {
+  fn render(&self, ctx: &mut Context, rend: &RenderComp) -> GameResult {
     let dp = DrawParam::default()
       .color(graphics::BLACK)
       .rotation(rend.rot)
       .dest([rend.pos.x, rend.pos.y]);
 
-    self.res.rect.draw(ctx, dp)
+    self.poly.draw(ctx, dp)
   }
 }

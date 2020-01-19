@@ -6,7 +6,8 @@ edition = "2018"
 
 [dependencies]
 ggez = "0.5.1"
-nalgebra = "0.19.0"
 legion = "0.2.1"
-nphysics2d = "0.13.0"
-ncollide2d = "0.21.0"
+
+nalgebra = "0.18.0"
+nphysics2d = "0.12.3"
+ncollide2d = "0.20.0"

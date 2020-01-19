@@ -4,8 +4,8 @@ use legion::query::{Read, Write};
 use legion::query::IntoQuery;
 use legion::schedule::Schedulable;
 use legion::system::SystemBuilder;
-use nalgebra::Vector2;
-use ncollide2d::shape::{Ball, Cuboid, ShapeHandle};
+use nalgebra::{Vector2, Point2};
+use ncollide2d::shape::{Ball, Cuboid, ShapeHandle, ConvexPolygon};
 use nphysics2d::{
   force_generator::DefaultForceGeneratorSet,
   joint::DefaultJointConstraintSet,
@@ -71,7 +71,7 @@ impl Physics {
             PhysCmd::None => {}
             PhysCmd::Lift(amt) => {
               let rigid = state.bodies.rigid_body_mut(phys.bh).unwrap();
-              rigid.apply_force(0, &Force2::linear(Vector2::new(0., amt)), ForceType::Impulse, false);
+              rigid.apply_force(0, &Force2::linear(Vector2::new(amt, amt)), ForceType::Impulse, false);
             }
           }
           phys.cmd = PhysCmd::None;
@@ -114,6 +114,22 @@ impl Physics {
     let bh = state.bodies.insert(body);
 
     let shape = ShapeHandle::new(Cuboid::new(half_extents));
+    let collider = ColliderDesc::new(shape)
+      .density(0.1)
+      .build(BodyPartHandle(bh, 0));
+    let ch = state.colliders.insert(collider);
+
+    PhysComp { bh, ch, cmd: PhysCmd::None }
+  }
+
+  pub fn add_static_poly(&mut self, points: &[Point2<f32>]) -> PhysComp {
+    let state = &mut *self.state.lock().unwrap();
+    let body = RigidBodyDesc::new()
+      .set_status(BodyStatus::Static)
+      .build();
+    let bh = state.bodies.insert(body);
+
+    let shape = ShapeHandle::new(ConvexPolygon::try_from_points(points).unwrap());
     let collider = ColliderDesc::new(shape)
       .density(0.1)
       .build(BodyPartHandle(bh, 0));

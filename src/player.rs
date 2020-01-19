@@ -5,7 +5,6 @@ use ggez::{
   graphics::{self, Drawable, DrawParam, Mesh},
 };
 use legion::entity::Entity;
-use legion::world::World;
 use nalgebra::Vector2;
 
 use crate::camera::{Renderable, RenderComp};
@@ -36,17 +35,17 @@ impl Player {
     })
   }
 
-  pub fn new(&mut self, world: &mut World, physics: &mut Physics) -> Entity {
-    world.insert((), vec![
-      (physics.add_ball(Vector2::new(20., 200.), 10.),
+  pub fn new(&self, shared: &mut Shared, ctx: &mut ggez::Context) -> GameResult<Entity> {
+    Ok(shared.world.insert((), vec![
+      (shared.physics.add_ball(Vector2::new(20., 200.), 10.),
        RenderComp { pos: Vector2::new(0., 0.), rot: 0. },
-       PlayerComp { res: self.res.clone() /*circle: self.circle*/ }),
-    ])[0]
+       PlayerComp { res: self.res.clone() }),
+    ])[0])
   }
 }
 
 impl Renderable for PlayerComp {
-  fn render(&self, _shared: &Shared, ctx: &mut Context, rend: &RenderComp) -> GameResult {
+  fn render(&self, ctx: &mut Context, rend: &RenderComp) -> GameResult {
     let dp = DrawParam::default()
       .color(graphics::BLACK)
       .rotation(rend.rot)

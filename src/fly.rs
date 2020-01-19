@@ -12,21 +12,25 @@ use crate::meshes::Meshes;
 use crate::phys::Physics;
 use crate::player::Player;
 
+pub const SCREEN_WIDTH: f32 = 1024.;
+pub const SCREEN_HEIGHT: f32 = 512.;
+
 pub struct Fly {
   universe: Universe,
-  world: World,
   schedule: Schedule,
-  physics: Physics,
 
   ground: Ground,
   player: Player,
 
   controls: Controls,
+  player_ent: Entity,
   shared: Shared,
 }
 
 pub struct Shared {
   pub meshes: Meshes,
+  pub world: World,
+  pub physics: Physics,
   pub camera: Camera,
 }
 
@@ -36,65 +40,61 @@ impl Fly {
     setup.title = "fly".to_string();
 
     let mut mode = WindowMode::default();
-    mode.width = 1024.;
-    mode.height = 512.;
+    mode.width = SCREEN_WIDTH;
+    mode.height = SCREEN_HEIGHT;
 
-    let (mut gctx, mut event_loop) = ContextBuilder::new("fly", "Joel Webber")
+    let (mut ctx, mut event_loop) = ContextBuilder::new("fly", "Joel Webber")
       .window_setup(setup)
       .window_mode(mode)
       .build()
       .expect("failed to create context");
 
     let universe = Universe::new();
-    let world = universe.create_world();
-    let physics = Physics::new();
-    let schedule = Fly::init_systems(&physics);
-    let controls = Controls::new();
 
     let mut shared = Shared {
       meshes: Meshes::new(),
+      world: universe.create_world(),
+      physics: Physics::new(),
       camera: Camera::new(),
     };
-    let ground = Ground::init(&mut shared, &mut gctx)?;
-    let player = Player::init(&mut shared, &mut gctx)?;
+    let ground = Ground::init(&mut shared, &mut ctx)?;
+    let player = Player::init(&mut shared, &mut ctx)?;
+
+    let player_ent = player.new(&mut shared, &mut ctx)?;
+    ground.new(&mut shared, &mut ctx)?;
+
+    let controls = Controls::new(player_ent);
+
+    let schedule = Schedule::builder()
+      .add_system(shared.physics.cmd_system())
+      .add_system(shared.physics.sim_system())
+      .build();
 
     let fly = &mut Fly {
       universe,
-      world,
       schedule,
-      physics,
       ground,
       player,
+
       controls,
+      player_ent,
       shared,
     };
 
-    fly.init_scene();
-    event::run(&mut gctx, &mut event_loop, fly)
-  }
-
-  fn init_systems(physics: &Physics) -> Schedule {
-    Schedule::builder()
-      .add_system(physics.cmd_system())
-      .add_system(physics.sim_system())
-      .build()
-  }
-
-  fn init_scene(&mut self) {
-    self.controls.player = Some(self.player.new(&mut self.world, &mut self.physics));
-    self.ground.new(&mut self.world, &mut self.physics);
+    event::run(&mut ctx, &mut event_loop, fly)
   }
 }
 
 impl EventHandler for Fly {
   fn update(&mut self, _ctx: &mut Context) -> GameResult<()> {
-    self.controls.update(&mut self.world);
-    self.schedule.execute(&mut self.world);
+    self.controls.update(&mut self.shared);
+    self.shared.camera.update(&self.shared.world, self.player_ent);
+    self.schedule.execute(&mut self.shared.world);
     Ok(())
   }
 
   fn draw(&mut self, ctx: &mut Context) -> GameResult {
-    self.shared.camera.render(&self.shared, ctx, &mut self.world)
+    self.shared.camera.render(&mut self.shared.world, ctx)
   }
 
   fn mouse_button_down_event(&mut self, _ctx: &mut Context, _button: MouseButton, _x: f32, _y: f32) {
